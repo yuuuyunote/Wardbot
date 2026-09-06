@@ -8,6 +8,10 @@ Groupのdefault_permissionsにより、既定では「サーバー管理」権�
 権限が無い状態でアクションを設定しようとしても保存自体は拒否しない
 （後から権限を付与する運用を想定）。ただし決定①の通り、その場で
 「この設定には○○権限が必要です」という案内を添える。
+
+timeout_duration: サーバーごとにtimeout時間を設定できる。範囲は
+database.MIN_TIMEOUT_HOURS〜MAX_TIMEOUT_HOURS（1〜672時間 = Discordの
+timeout仕様上の上限28日）。
 """
 
 from typing import Literal, Optional
@@ -105,6 +109,22 @@ class ConfigGroup(app_commands.Group):
                 f"検知ログの投稿先を{channel.mention}に設定しました。", ephemeral=True
             )
 
+    @app_commands.command(
+        name="timeout_duration", description="timeoutアクションを実行する際の時間（時間単位）を設定する"
+    )
+    @app_commands.describe(
+        hours=f"timeout時間（{database.MIN_TIMEOUT_HOURS}〜{database.MAX_TIMEOUT_HOURS}時間、Discord仕様上の上限は28日）"
+    )
+    async def timeout_duration(
+        self,
+        interaction: discord.Interaction,
+        hours: app_commands.Range[int, database.MIN_TIMEOUT_HOURS, database.MAX_TIMEOUT_HOURS],
+    ) -> None:
+        database.set_timeout_duration(str(interaction.guild_id), hours)
+        await interaction.response.send_message(
+            f"timeout時間を{hours}時間に設定しました。", ephemeral=True
+        )
+
     @app_commands.command(name="show", description="現在のこのサーバーの設定を表示する")
     async def show(self, interaction: discord.Interaction) -> None:
         settings = database.get_guild_settings(str(interaction.guild_id))
@@ -115,6 +135,7 @@ class ConfigGroup(app_commands.Group):
             f"入室検知時のアクション: {_JOIN_ACTION_LABELS.get(settings['join_action'], settings['join_action'])}",
             f"招待/掲示板リンク検知時のアクション: "
             f"{_INVITE_ACTION_LABELS.get(settings['invite_action'], settings['invite_action'])}",
+            f"timeout時間: {settings['timeout_duration_hours']}時間",
             f"検知ログ投稿先: {log_channel_mention}",
         ]
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
