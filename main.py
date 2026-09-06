@@ -7,22 +7,29 @@ report-utility-bot のエントリーポイント。
 - members: on_member_join（入室検知）に必須
 - message_content: on_message本文からの招待/掲示板リンク検知に必須
 
-Bot招待URLの権限ビットは0（最小権限方針、決定①）。timeout/kick/ban/
+Bot招待URLの権限ビットは最小権限方針（決定①）。timeout/kick/ban/
 メッセージの管理は、各サーバーの管理者が/configでアクションを有効化した後、
 サーバー設定でBotのロールに個別付与してもらう運用。
+
+重要: load_dotenv()は他のプロジェクト内モジュールをimportするより前に
+呼ぶこと。blocklist_data.py等、モジュールのトップレベルでos.getenv()を
+呼んでいるファイルがあるため、load_dotenv()が後だと.envの内容が
+反映される前に空文字で確定してしまう（実際にこの順序バグでBLOCKLIST_DATA_REPO
+が空になる障害が発生した）。
 """
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import os
 
 import discord
 from discord import app_commands
-from dotenv import load_dotenv
 
 import database
 from config import ConfigGroup
 from events import setup_events
-
-load_dotenv()
 
 # 開発中の即時sync用。本番運用ではGUILD_IDを設定せずグローバルsyncにする
 # （xgomi-discord側のBotと同じ運用方針）。
