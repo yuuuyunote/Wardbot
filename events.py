@@ -6,6 +6,9 @@ Botのgatewayイベントハンドラ。検知 → デフォルトアクショ�
 on_member_join: members Intentが必須。
 on_message: message_content Intentが必須（本文から招待/掲示板リンクを
 探すため）。
+
+timeout_hoursはguild_settings.timeout_duration_hours（/configで変更可能）
+をそのまま各アクション実行関数に渡す。
 """
 
 import discord
@@ -27,7 +30,9 @@ def setup_events(client: discord.Client) -> None:
         action = settings["join_action"]
         target_type = "bot" if member.bot else "user"
 
-        result = await execute_join_action(member, action)
+        result = await execute_join_action(
+            member, action, timeout_hours=settings["timeout_duration_hours"]
+        )
 
         await post_detection_log(
             client,
@@ -54,7 +59,9 @@ def setup_events(client: discord.Client) -> None:
         settings = database.get_guild_settings(str(message.guild.id))
         action = settings["invite_action"]
 
-        result = await execute_invite_action(message, action)
+        result = await execute_invite_action(
+            message, action, timeout_hours=settings["timeout_duration_hours"]
+        )
 
         await post_detection_log(
             client,
