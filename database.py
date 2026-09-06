@@ -7,6 +7,9 @@ xgomi-discord・Guide Base +のダッシュボード用DBとは完全に別プ�
 テーブルはguild_settingsの1つだけ。検知ログはDBに保存せず、各サーバーの
 ログチャンネル＋開発者用横断チャンネルへのリアルタイム投稿のみで完結させる
 という設計判断のため、detection_logs系のテーブルは持たない。
+
+timeout_duration_hours: サーバーごとにtimeout時間を設定できるようにした列。
+初期値は24時間。上限672時間（28日）はDiscordのtimeout仕様上の最大値。
 """
 
 import os
@@ -18,6 +21,9 @@ import psycopg2.extras
 
 VALID_JOIN_ACTIONS = frozenset({"none", "timeout", "kick", "ban"})
 VALID_INVITE_ACTIONS = frozenset({"none", "delete", "timeout", "kick", "ban"})
+DEFAULT_TIMEOUT_HOURS = 24
+MIN_TIMEOUT_HOURS = 1
+MAX_TIMEOUT_HOURS = 672  # Discordのtimeout上限（28日）
 
 
 def get_conn():
@@ -44,13 +50,19 @@ def _execute(sql: str, args: tuple = ()) -> list[dict]:
 
 def init_db() -> None:
     _execute(
-        """CREATE TABLE IF NOT EXISTS guild_settings (
-            guild_id        TEXT PRIMARY KEY,
-            join_action     TEXT NOT NULL DEFAULT 'none',
-            invite_action   TEXT NOT NULL DEFAULT 'none',
-            log_channel_id  TEXT,
-            updated_at      TEXT NOT NULL
+        f"""CREATE TABLE IF NOT EXISTS guild_settings (
+            guild_id              TEXT PRIMARY KEY,
+            join_action           TEXT NOT NULL DEFAULT 'none',
+            invite_action         TEXT NOT NULL DEFAULT 'none',
+            log_channel_id        TEXT,
+            timeout_duration_hours INTEGER NOT NULL DEFAULT {DEFAULT_TIMEOUT_HOURS},
+            updated_at            TEXT NOT NULL
         )"""
+    )
+    # 既存テーブルに対するマイグレーション（timeout_duration_hours追加分）
+    _execute(
+        f"ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS "
+        f"timeout_duration_hours INTEGER NOT NULL DEFAULT {DEFAULT_TIMEOUT_HOURS}"
     )
 
 
@@ -68,6 +80,7 @@ def get_guild_settings(guild_id: str) -> dict:
         "join_action": "none",
         "invite_action": "none",
         "log_channel_id": None,
+        "timeout_duration_hours": DEFAULT_TIMEOUT_HOURS,
         "updated_at": None,
     }
 
@@ -88,6 +101,12 @@ def set_log_channel(guild_id: str, channel_id: Optional[str]) -> None:
     _upsert(guild_id, log_channel_id=channel_id)
 
 
+def set_timeout_duration(guild_id: str, hours: int) -> None:
+    if not (MIN_TIMEOUT_HOURS <= hours <= MAX_TIMEOUT_HOURS):
+        raise ValueError(f"timeout hours must be between {MIN_TIMEOUT_HOURS} and {MAX_TIMEOUT_HOURS}")
+    _upsert(guild_id, timeout_duration_hours=hours)
+
+
 def _upsert(guild_id: str, **fields) -> None:
     """
     guild_settingsの部分更新。行が無ければ他のカラムはデフォルト値でINSERTし、
@@ -99,16 +118,19 @@ def _upsert(guild_id: str, **fields) -> None:
     join_action = fields.get("join_action", existing["join_action"])
     invite_action = fields.get("invite_action", existing["invite_action"])
     log_channel_id = fields.get("log_channel_id", existing["log_channel_id"])
+    timeout_duration_hours = fields.get("timeout_duration_hours", existing["timeout_duration_hours"])
 
     _execute(
         """
-        INSERT INTO guild_settings (guild_id, join_action, invite_action, log_channel_id, updated_at)
-        VALUES (%s,%s,%s,%s,%s)
+        INSERT INTO guild_settings
+            (guild_id, join_action, invite_action, log_channel_id, timeout_duration_hours, updated_at)
+        VALUES (%s,%s,%s,%s,%s,%s)
         ON CONFLICT (guild_id) DO UPDATE SET
             join_action = EXCLUDED.join_action,
             invite_action = EXCLUDED.invite_action,
             log_channel_id = EXCLUDED.log_channel_id,
+            timeout_duration_hours = EXCLUDED.timeout_duration_hours,
             updated_at = EXCLUDED.updated_at
         """,
-        (guild_id, join_action, invite_action, log_channel_id, now),
+        (guild_id, join_action, invite_action, log_channel_id, timeout_duration_hours, now),
     )
