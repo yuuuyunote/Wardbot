@@ -12,8 +12,18 @@ Groupのdefault_permissionsにより、既定では「サーバー管理」権�
 timeout_duration: サーバーごとにtimeout時間を設定できる。範囲は
 database.MIN_TIMEOUT_HOURS〜MAX_TIMEOUT_HOURS（1〜672時間 = Discordの
 timeout仕様上の上限28日）。
+
+重要: database.pyの関数はpsycopg2（同期・ブロッキング）で書かれている。
+discord.pyの非同期イベントループ上でこれを直接awaitなしに呼ぶと
+イベントループ全体（Discordのgatewayも含む）が止まり、Interactionの
+3秒応答期限に間に合わなくなる（実際にこれが原因で「アプリケーションが
+応答しません」が発生した）。そのため、必ず
+  1. 先にinteraction.response.defer()で応答期限を15分に延長する
+  2. database.*の呼び出しはasyncio.to_thread()で別スレッドに逃がす
+の2点を徹底する。xgomi-discord側のbot/reports/db.pyと同じ設計方針。
 """
 
+import asyncio
 from typing import Literal, Optional
 
 import discord
@@ -46,19 +56,21 @@ class ConfigGroup(app_commands.Group):
     @app_commands.command(name="join_action", description="入室検知時のデフォルトアクションを設定する")
     @app_commands.describe(action="入室検知時に自動実行するアクション")
     async def join_action(self, interaction: discord.Interaction, action: JoinAction) -> None:
-        database.set_join_action(str(interaction.guild_id), action)
+        await interaction.response.defer(ephemeral=True)
+
+        await asyncio.to_thread(database.set_join_action, str(interaction.guild_id), action)
 
         missing = missing_permission_label(interaction.guild, action)
         label = _JOIN_ACTION_LABELS[action]
         if missing:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"入室検知時のアクションを「{label}」に設定しました。\n"
                 f"⚠️ 現在Botに「{missing}」権限が無いため、検知が発生してもこのアクションは実行できません。"
                 "サーバー設定でBotのロールに権限を付与してください。",
                 ephemeral=True,
             )
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"入室検知時のアクションを「{label}」に設定しました。", ephemeral=True
             )
 
@@ -67,19 +79,21 @@ class ConfigGroup(app_commands.Group):
     )
     @app_commands.describe(action="招待/掲示板リンク検知時に自動実行するアクション")
     async def invite_action(self, interaction: discord.Interaction, action: InviteAction) -> None:
-        database.set_invite_action(str(interaction.guild_id), action)
+        await interaction.response.defer(ephemeral=True)
+
+        await asyncio.to_thread(database.set_invite_action, str(interaction.guild_id), action)
 
         missing = missing_permission_label(interaction.guild, action)
         label = _INVITE_ACTION_LABELS[action]
         if missing:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"招待/掲示板リンク検知時のアクションを「{label}」に設定しました。\n"
                 f"⚠️ 現在Botに「{missing}」権限が無いため、検知が発生してもこのアクションは実行できません。"
                 "サーバー設定でBotのロールに権限を付与してください。",
                 ephemeral=True,
             )
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"招待/掲示板リンク検知時のアクションを「{label}」に設定しました。", ephemeral=True
             )
 
@@ -90,22 +104,26 @@ class ConfigGroup(app_commands.Group):
         interaction: discord.Interaction,
         channel: Optional[discord.TextChannel] = None,
     ) -> None:
-        database.set_log_channel(str(interaction.guild_id), str(channel.id) if channel else None)
+        await interaction.response.defer(ephemeral=True)
+
+        await asyncio.to_thread(
+            database.set_log_channel, str(interaction.guild_id), str(channel.id) if channel else None
+        )
 
         if channel is None:
-            await interaction.response.send_message("検知ログの投稿先を解除しました。", ephemeral=True)
+            await interaction.followup.send("検知ログの投稿先を解除しました。", ephemeral=True)
             return
 
         perms = channel.permissions_for(interaction.guild.me)
         if not perms.send_messages:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"検知ログの投稿先を{channel.mention}に設定しました。\n"
                 "⚠️ ただしBotがこのチャンネルにメッセージを送信する権限を持っていないため、"
                 "このままでは投稿できません。チャンネル権限を確認してください。",
                 ephemeral=True,
             )
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"検知ログの投稿先を{channel.mention}に設定しました。", ephemeral=True
             )
 
@@ -120,14 +138,18 @@ class ConfigGroup(app_commands.Group):
         interaction: discord.Interaction,
         hours: app_commands.Range[int, database.MIN_TIMEOUT_HOURS, database.MAX_TIMEOUT_HOURS],
     ) -> None:
-        database.set_timeout_duration(str(interaction.guild_id), hours)
-        await interaction.response.send_message(
-            f"timeout時間を{hours}時間に設定しました。", ephemeral=True
-        )
+        await interaction.response.defer(ephemeral=True)
+
+        await asyncio.to_thread(database.set_timeout_duration, str(interaction.guild_id), hours)
+
+        await interaction.followup.send(f"timeout時間を{hours}時間に設定しました。", ephemeral=True)
 
     @app_commands.command(name="show", description="現在のこのサーバーの設定を表示する")
     async def show(self, interaction: discord.Interaction) -> None:
-        settings = database.get_guild_settings(str(interaction.guild_id))
+        await interaction.response.defer(ephemeral=True)
+
+        settings = await asyncio.to_thread(database.get_guild_settings, str(interaction.guild_id))
+
         log_channel_mention = (
             f"<#{settings['log_channel_id']}>" if settings["log_channel_id"] else "（未設定）"
         )
@@ -138,4 +160,4 @@ class ConfigGroup(app_commands.Group):
             f"timeout時間: {settings['timeout_duration_hours']}時間",
             f"検知ログ投稿先: {log_channel_mention}",
         ]
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
