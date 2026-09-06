@@ -8,8 +8,9 @@ missing_permissionに入れて返す（決定④：権限不足時は明確な�
 discord.Forbidden（権限フラグはあるがロール階層順序等で実際には拒否された
 ケース）は別途errorとして拾う。
 
-timeoutの期間は設計メモに明記が無かったための暫定値（24時間）。運用しながら
-調整したくなったら、guild_settingsにtimeout_duration列を足せばよい。
+timeoutの期間はサーバーごとに/configで設定可能（database.timeout_duration_hours）。
+呼び出し側（events.py）がguild_settingsから読んだ値をtimeout_hoursとして渡す想定。
+デフォルト値のDEFAULT_TIMEOUT_HOURSはdatabase.pyの初期値と合わせて24。
 """
 
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ import discord
 
 from permissions import missing_permission_label
 
-DEFAULT_TIMEOUT_DURATION = timedelta(hours=24)
+DEFAULT_TIMEOUT_HOURS = 24
 
 
 @dataclass
@@ -31,7 +32,9 @@ class ActionResult:
     error: Optional[str] = None
 
 
-async def execute_join_action(member: discord.Member, action: str) -> ActionResult:
+async def execute_join_action(
+    member: discord.Member, action: str, timeout_hours: int = DEFAULT_TIMEOUT_HOURS
+) -> ActionResult:
     """入室検知時のアクション（none/timeout/kick/ban）を実行する。"""
     if action == "none":
         return ActionResult(action=action, success=True)
@@ -43,8 +46,8 @@ async def execute_join_action(member: discord.Member, action: str) -> ActionResu
     try:
         if action == "timeout":
             await member.timeout(
-                DEFAULT_TIMEOUT_DURATION,
-                reason="通報リストに登録されているアカウントのため自動timeout",
+                timedelta(hours=timeout_hours),
+                reason=f"通報リストに登録されているアカウントのため自動timeout（{timeout_hours}時間）",
             )
         elif action == "kick":
             await member.kick(reason="通報リストに登録されているアカウントのため自動kick")
@@ -69,7 +72,9 @@ async def execute_join_action(member: discord.Member, action: str) -> ActionResu
     return ActionResult(action=action, success=True)
 
 
-async def execute_invite_action(message: discord.Message, action: str) -> ActionResult:
+async def execute_invite_action(
+    message: discord.Message, action: str, timeout_hours: int = DEFAULT_TIMEOUT_HOURS
+) -> ActionResult:
     """
     招待/掲示板リンク検知時のアクション（none/delete/timeout/kick/ban）を実行する。
 
@@ -102,4 +107,4 @@ async def execute_invite_action(message: discord.Message, action: str) -> Action
     member = message.author
     if not isinstance(member, discord.Member):
         return ActionResult(action=action, success=False, error="author is not a guild member")
-    return await execute_join_action(member, action)
+    return await execute_join_action(member, action, timeout_hours=timeout_hours)
