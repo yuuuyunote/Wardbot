@@ -7,9 +7,17 @@ on_member_join: members Intentが必須。
 on_message: message_content Intentが必須（本文から招待/掲示板リンクを
 探すため）。
 
+database.get_guild_settings()はpsycopg2（同期・ブロッキング）なので、
+asyncio.to_thread()で別スレッドに逃がす。ここを直接awaitなしに呼ぶと
+イベントループ全体（Discordのgateway・ハートビート含む）が止まり、
+最悪Botがオフライン扱いになる（discord-dashboard側で実際に起きた障害と
+同じ原因）。
+
 timeout_hoursはguild_settings.timeout_duration_hours（/configで変更可能）
 をそのまま各アクション実行関数に渡す。
 """
+
+import asyncio
 
 import discord
 
@@ -26,7 +34,7 @@ def setup_events(client: discord.Client) -> None:
         if entry is None:
             return
 
-        settings = database.get_guild_settings(str(member.guild.id))
+        settings = await asyncio.to_thread(database.get_guild_settings, str(member.guild.id))
         action = settings["join_action"]
         target_type = "bot" if member.bot else "user"
 
@@ -56,7 +64,7 @@ def setup_events(client: discord.Client) -> None:
         if match is None:
             return
 
-        settings = database.get_guild_settings(str(message.guild.id))
+        settings = await asyncio.to_thread(database.get_guild_settings, str(message.guild.id))
         action = settings["invite_action"]
 
         result = await execute_invite_action(
