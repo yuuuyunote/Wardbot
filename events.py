@@ -2,8 +2,8 @@
 events.py
 Botのgatewayイベントハンドラ。
 
-- on_message: 招待/掲示板リンク検知 → ログ投稿 ＋ タイムアウト（0分なら
-  ログのみ）
+- on_message: 招待/掲示板リンク検知 → メッセージ削除（常に試行）＋タイムアウト
+  （0分なら省略）→ ログ投稿
 - on_guild_join / on_guild_remove: 導入・削除の通知（開発者用チャンネル）
 
 入室検知（ユーザー/Bot）は一旦オフ。detection.pyのfind_reported_member自体は
@@ -18,7 +18,7 @@ import asyncio
 import discord
 
 import database
-from actions import execute_invite_timeout
+from actions import execute_invite_response
 from detection import find_reported_server_in_text
 from detection_logging import post_detection_log
 from guild_join_logging import post_guild_join_log, post_guild_leave_log
@@ -44,7 +44,7 @@ def setup_events(client: discord.Client) -> None:
 
         settings = await asyncio.to_thread(database.get_guild_settings, str(message.guild.id))
 
-        result = await execute_invite_timeout(
+        result = await execute_invite_response(
             message, timeout_minutes=settings["timeout_duration_minutes"]
         )
 
