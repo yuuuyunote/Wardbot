@@ -20,10 +20,27 @@
 
 Discord公式の招待リンクだけでなく、**国内外17の掲示板サイトのサーバーリンク**が送信された場合も検知可能です。
 
-| 対応リンク |
-|---|
-| Discord公式招待リンク (`discord.gg` / `discord.com/invite`) |
-| 国内外17の掲示板・サーバーリストサイトのサーバー直リンク（詳細は下記） |
+Discord公式招待リンク (`discord.gg` / `discord.com/invite`) に加え、以下のサイトに対応しています。
+
+| サイト名 | リンク |
+|---|---|
+| Disboard | https://disboard.org/ |
+| Dislist | https://dislist.net/ |
+| top.gg | https://top.gg/ |
+| Shark bot | https://sharkbot.xyz/ |
+| Discope | https://discope.net/ |
+| ここなつ（ここなつfrex） | https://frex.kokonatsu.top/ |
+| Discom | https://discom.nvacod.top/ |
+| 鯖ちゃんねる | https://discord.sabach.jp/ |
+| Dicoall | https://dicoall.com/ |
+| ディス速 | https://dissoku.net/ |
+| TakasumiBOT | https://takasumibot.com/ |
+| Rova One | https://rovaone.rovaex.com/ |
+| Distopia | https://distopia.top/ |
+| DISCORD.CENTER | https://discord.center/ |
+| Discord Servers | https://discordservers.com/ |
+| communityone.io | https://communityone.io/ |
+| DisLOUNGE | https://dislounge.net/ |
 
 ## 安心の運用方針
 
