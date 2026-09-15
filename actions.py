@@ -18,6 +18,8 @@ import discord
 
 from permissions import missing_permission_label
 
+async def execute_invite_timeout(*args, **kwargs):
+    pass
 
 @dataclass
 class ActionResult:
