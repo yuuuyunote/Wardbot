@@ -2,9 +2,10 @@
 permissions.py
 アクション実行に必要なDiscord権限のチェック。
 
-方針転換により、招待/掲示板リンク検知のアクションはtimeoutのみになった
-（delete/kick/banは廃止）。Bot招待時点で必要な権限は
-チャンネルを表示・メッセージを送る・メンバーをタイムアウトの3つのみ。
+招待/掲示板リンク検知は「削除（常に試行）＋timeout（0分なら省略）」の
+2アクション構成。deleteはチャンネル単位の権限上書きがあり得るため
+channel.permissions_for()、timeoutはギルド単位の権限なのでguild.me.guild_permissions
+で判定する。
 """
 
 from typing import Optional
@@ -12,10 +13,12 @@ from typing import Optional
 import discord
 
 ACTION_PERMISSION_LABELS = {
+    "delete": "メッセージの管理",
     "timeout": "メンバーをタイムアウト",
 }
 
 _ACTION_PERMISSION_ATTR = {
+    "delete": "manage_messages",
     "timeout": "moderate_members",
 }
 
@@ -40,7 +43,11 @@ def missing_permission_label(
     if me is None:
         return ACTION_PERMISSION_LABELS.get(action, action)
 
-    perms = me.guild_permissions
+    if action == "delete" and channel is not None:
+        perms = channel.permissions_for(me)
+    else:
+        perms = me.guild_permissions
+
     if getattr(perms, attr, False):
         return None
     return ACTION_PERMISSION_LABELS[action]
