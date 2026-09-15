@@ -4,11 +4,7 @@ detection_logging.py
 ログチャンネル＋開発者用横断チャンネル（DEV_LOG_CHANNEL_ID）へリアルタイム
 投稿する。DBには保存しない。
 
-方針転換により、アクションはtimeoutのみ（0分＝無効化）になったため、
-ActionResultの表示ロジックもそれに合わせて簡略化している。
-
-sender: 招待/掲示板リンク検知でのみ使う。「誰がそのリンクを投稿したか」を
-ログに残すための情報。
+削除・timeoutは独立した結果を持つため、ログ表示も別々の行にしている。
 """
 
 import os
@@ -22,6 +18,24 @@ from category_labels import label_for
 DEV_LOG_CHANNEL_ID = os.getenv("DEV_LOG_CHANNEL_ID")
 
 
+def _delete_line(action_result: ActionResult) -> str:
+    if action_result.deleted:
+        return "**メッセージ削除**: 実行しました"
+    if action_result.delete_missing_permission:
+        return f"**⚠️ メッセージ削除未実行（権限不足）**: Botに「{action_result.delete_missing_permission}」権限がありません"
+    return f"**⚠️ メッセージ削除未実行（エラー）**: {action_result.delete_error or '不明なエラー'}"
+
+
+def _timeout_line(action_result: ActionResult) -> str:
+    if action_result.timeout_skipped:
+        return "**タイムアウト**: 無効化されています（設定で0分）"
+    if action_result.timed_out:
+        return "**タイムアウト**: 実行しました"
+    if action_result.timeout_missing_permission:
+        return f"**⚠️ タイムアウト未実行（権限不足）**: Botに「{action_result.timeout_missing_permission}」権限がありません"
+    return f"**⚠️ タイムアウト未実行（エラー）**: {action_result.timeout_error or '不明なエラー'}"
+
+
 def _build_log_view(
     *,
     target_type: str,
@@ -33,7 +47,8 @@ def _build_log_view(
     guild_name: Optional[str] = None,
     sender: Optional[discord.abc.User] = None,
 ) -> discord.ui.LayoutView:
-    accent = discord.Colour.orange() if action_result.success else discord.Colour.red()
+    all_ok = action_result.deleted and (action_result.timed_out or action_result.timeout_skipped)
+    accent = discord.Colour.orange() if all_ok else discord.Colour.red()
 
     view = discord.ui.LayoutView()
     container = discord.ui.Container(accent_color=accent)
@@ -53,16 +68,8 @@ def _build_log_view(
     lines.append(f"**カテゴリ**: {labels}")
     lines.append(f"**補足**: {note or '（なし）'}")
 
-    if action_result.missing_permission:
-        lines.append(
-            f"**⚠️ タイムアウト未実行（権限不足）**: Botに「{action_result.missing_permission}」権限がありません"
-        )
-    elif not action_result.success:
-        lines.append(f"**⚠️ タイムアウト未実行（エラー）**: {action_result.error or '不明なエラー'}")
-    elif action_result.timed_out:
-        lines.append("**投稿者をタイムアウトしました**")
-    else:
-        lines.append("**タイムアウトは無効化されています（ログのみ）**")
+    lines.append(_delete_line(action_result))
+    lines.append(_timeout_line(action_result))
 
     container.add_item(discord.ui.TextDisplay("\n".join(lines)))
     view.add_item(container)
@@ -82,11 +89,6 @@ async def post_detection_log(
     matched_source: Optional[str] = None,
     sender: Optional[discord.abc.User] = None,
 ) -> None:
-    """
-    サーバー側のログチャンネル（設定されていれば）と、開発者用横断チャンネル
-    （DEV_LOG_CHANNEL_ID、設定されていれば）の両方に検知ログを投稿する。
-    片方の投稿が失敗してももう片方には影響しないよう個別にtry/exceptしている。
-    """
     if log_channel_id:
         try:
             channel = client.get_channel(int(log_channel_id)) or await client.fetch_channel(
