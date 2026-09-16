@@ -18,6 +18,7 @@ import discord
 
 from permissions import missing_permission_label
 
+
 @dataclass
 class ActionResult:
     deleted: bool = False
