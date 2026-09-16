@@ -63,6 +63,10 @@ Discord公式招待リンク (`discord.gg` / `discord.com/invite`) に加え、�
 
 **[💬 サポートサーバーに参加する](https://discord.gg/qzBm9aMWss)**
 
+## 利用規約・プライバシーポリシー
+- 利用規約： [Terms.md](https://github.com/yuuuyunote/Wardbot/blob/main/Terms.md)
+- プライバシーポリシー： [Privacy_Policy.md](https://github.com/yuuuyunote/Wardbot/blob/main/Privacy_Policy.md)
+
 ---
 
 <div align="center">
