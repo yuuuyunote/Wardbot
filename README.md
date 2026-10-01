@@ -64,6 +64,12 @@ Discord公式招待リンク (`discord.gg` / `discord.com/invite`) に加え、�
 
 不具合報告、誤検知の通報、リストからの解除申請などは、サポートサーバーにて受け付けています。
 
+## リスト登録連携サーバー
+
+迷惑サーバーの登録サーバーの情報提供を頂いています。
+
+* Dislist（Fortify Team）：https://dislist.net/
+
 **[💬 サポートサーバーに参加する](https://discord.gg/qzBm9aMWss)**
 
 ## 利用規約・プライバシーポリシー
